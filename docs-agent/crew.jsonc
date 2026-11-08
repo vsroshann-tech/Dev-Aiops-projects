@@ -1,0 +1,38 @@
+{
+  // Display name for this crew
+  "name": "docs-agent",
+
+  // Agents to include — each must have a matching agents/<name>.jsonc file
+  "agents": ["roshan_tool_expert"],
+
+  // Task definitions — executed in order for sequential process
+  "tasks": [
+    {
+      // Task identifier
+      "name": "answer_the_user_question_task",
+
+      // What the task should accomplish
+      "description": "Answer the user question: {question} with the most relevant information from the context and available knowledge",
+
+      // Clear definition of what the output should look like
+      "expected_output": "Best answer to the user question",
+
+      // Which agent handles this task
+      "agent": "roshan_tool_expert"
+    }
+  ],
+
+  // Execution process
+  "process": "sequential",
+
+  // Enable verbose logging during execution
+  "verbose": true,
+
+  // Enable crew memory — disabled to prevent ChromaDB/OpenAI key errors locally
+  "memory": false,
+
+  // Optional runtime input defaults so `crewai run` executes immediately without pausing
+  "inputs": {
+    "question": "What is the Roshan platform, and why is it better than Prometheus by using VictoriaMetrics?"
+  }
+}
