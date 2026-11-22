@@ -1,0 +1,26 @@
+# Optional Self-Hosted Retool POC Template for Local Ubuntu
+# Note: Self-Hosted Retool requires a free/enterprise Retool license key from my.retool.com.
+# Run alongside the main docker-compose.yml:
+#   docker compose -f docker-compose.yml -f retool/docker-compose.retool.yml up -d
+
+services:
+  retool-onpremise:
+    image: tryretool/backend:latest
+    container_name: retool-poc
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - LICENSE_KEY=${RETOOL_LICENSE_KEY:-EXPIRED-OR-SET-YOUR-KEY}
+      - JWT_SECRET=${RETOOL_JWT_SECRET:-local-ubuntu-poc-jwt-secret-change-me}
+      - ENCRYPTION_KEY=${RETOOL_ENCRYPTION_KEY:-local-ubuntu-poc-enc-key-change-me}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=retool_internal
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres_admin_poc
+      - SERVICE_TYPE=MAIN_BACKEND,DB_CONNECTOR
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - postgres

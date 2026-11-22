@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DevOps AI Agent — Local Ubuntu POC Console</title>
+  <style>
+    :root { --bg:#0f172a; --card:#1e293b; --muted:#94a3b8; --text:#f8fafc; --accent:#38bdf8; --ok:#22c55e; --warn:#f59e0b; --border:#334155; }
+    * { box-sizing: border-box; font-family: Inter, system-ui, -apple-system, sans-serif; }
+    body { margin: 0; background: var(--bg); color: var(--text); display: grid; grid-template-columns: 330px 1fr; height: 100vh; }
+    aside { background: var(--card); border-right: 1px solid var(--border); padding: 18px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; }
+    main { display: flex; flex-direction: column; height: 100vh; }
+    header { padding: 14px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: #131c31; }
+    .badge { font-size: 12px; padding: 4px 10px; border-radius: 999px; background: #0c4a6e; color: var(--accent); border: 1px solid #0369a1; }
+    #chat { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
+    .msg { max-width: 82%; padding: 12px 16px; border-radius: 12px; line-height: 1.5; white-space: pre-wrap; font-size: 14px; }
+    .msg.user { align-self: flex-end; background: #0284c7; color: #fff; }
+    .msg.bot { align-self: flex-start; background: var(--card); border: 1px solid var(--border); }
+    .meta { font-size: 11px; color: var(--muted); margin-top: 8px; border-top: 1px solid var(--border); padding-top: 6px; }
+    form.composer { display: flex; gap: 10px; padding: 14px 20px; border-top: 1px solid var(--border); background: #131c31; }
+    input, select, button { border-radius: 8px; border: 1px solid var(--border); background: #0f172a; color: var(--text); padding: 10px 12px; font-size: 13px; }
+    button { background: #0284c7; border: none; font-weight: 600; cursor: pointer; }
+    button:hover { background: #0369a1; }
+    button.secondary { background: #334155; }
+    h3 { margin: 0 0 8px 0; font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+    .box { background: #0f172a; border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
+    .doc-item { font-size: 12px; padding: 6px 0; border-bottom: 1px dashed var(--border); display: flex; justify-content: space-between; gap: 6px; }
+    .prompts { display: flex; flex-wrap: wrap; gap: 6px; }
+    .chip { font-size: 11px; padding: 5px 8px; background: #1e293b; border: 1px solid var(--border); border-radius: 6px; cursor: pointer; color: var(--accent); }
+  </style>
+</head>
+<body>
+  <aside>
+    <div>
+      <h2 style="margin:0;font-size:18px;">DevOps AI Agent</h2>
+      <div style="font-size:12px;color:var(--muted);margin-top:4px;">Ubuntu POC Console (Retool API Mirror)</div>
+    </div>
+
+    <div class="box">
+      <h3>API Auth</h3>
+      <input id="apiKey" type="password" value="dev-retool-poc-key-change-me" style="width:100%;margin-bottom:6px;" />
+      <input id="userEmail" type="text" value="devops-poc@company.internal" style="width:100%;" placeholder="User email" />
+    </div>
+
+    <div class="box">
+      <h3>Upload Internal Docs (RAG)</h3>
+      <input id="docFile" type="file" multiple accept=".md,.txt,.pdf,.yaml,.yml,.json,.sql" style="width:100%;margin-bottom:8px;" />
+      <select id="docClass" style="width:100%;margin-bottom:8px;">
+        <option value="internal">internal</option>
+        <option value="confidential">confidential</option>
+        <option value="public-poc">public-poc</option>
+      </select>
+      <button onclick="uploadDoc()" style="width:100%;">Upload & Index Document(s)</button>
+      <button class="secondary" onclick="clearDocs()" style="width:100%;margin-top:6px;">Clear All Indexed Docs</button>
+      <div id="docList" style="margin-top:10px;max-height:160px;overflow-y:auto;"></div>
+    </div>
+
+    <div class="box">
+      <h3>Quick Test Prompts</h3>
+      <div class="prompts">
+        <span class="chip" onclick="usePrompt('Why did our GitHub Actions deploy-eks-prod workflow fail?')">GitHub Actions Failure</span>
+        <span class="chip" onclick="usePrompt('Production ALB is returning 502 errors on AWS EKS, check compute and CloudWatch')">AWS 502 Triage</span>
+        <span class="chip" onclick="usePrompt('Check Postgres lock contention and MySQL connection usage')">Postgres & MySQL Check</span>
+        <span class="chip" onclick="usePrompt('Run a security compliance audit on AWS and check our policy')">Security Audit</span>
+        <span class="chip" onclick="usePrompt('Run SQL: DROP TABLE orders;')">Test SQL Guardrail</span>
+      </div>
+    </div>
+  </aside>
+
+  <main>
+    <header>
+      <div><strong>Internal Troubleshooting Chat</strong> <span id="statusText" style="font-size:12px;color:var(--muted);margin-left:8px;">Connecting...</span></div>
+      <span class="badge">RAG + MCP + Skills + Audit</span>
+    </header>
+    <div id="chat"></div>
+    <form class="composer" onsubmit="sendChat(event)">
+      <input id="promptInput" type="text" placeholder="Ask about CI/CD failures, AWS 502s, Postgres/MySQL locks, or internal runbooks..." style="flex:1;" required />
+      <button type="submit">Send</button>
+    </form>
+  </main>
+
+  <script>
+    const history = [];
+    function headers() {
+      return {
+        "X-API-Key": document.getElementById("apiKey").value,
+        "X-User-Email": document.getElementById("userEmail").value,
+        "X-Client-Source": "local-poc-ui"
+      };
+    }
+    function usePrompt(text) {
+      document.getElementById("promptInput").value = text;
+    }
+    function addMsg(role, text, meta = "") {
+      const chat = document.getElementById("chat");
+      const div = document.createElement("div");
+      div.className = "msg " + role;
+      div.textContent = text;
+      if (meta) {
+        const m = document.createElement("div");
+        m.className = "meta";
+        m.textContent = meta;
+        div.appendChild(m);
+      }
+      chat.appendChild(div);
+      chat.scrollTop = chat.scrollHeight;
+    }
+    async function refreshStatus() {
+      try {
+        const r = await fetch("/health");
+        const h = await r.json();
+        document.getElementById("statusText").textContent =
+          `Mode: ${h.poc_mode} | LLM: ${h.llm_provider} | Docs: ${h.documents_indexed} | Skills: ${h.skills_loaded} | MCP Tools: ${h.mcp_tools_available}`;
+      } catch (e) {
+        document.getElementById("statusText").textContent = "Offline";
+      }
+      refreshDocs();
+    }
+    async function refreshDocs() {
+      try {
+        const r = await fetch("/api/v1/docs", { headers: headers() });
+        if (!r.ok) return;
+        const d = await r.json();
+        const el = document.getElementById("docList");
+        el.innerHTML = (d.documents || []).map(doc =>
+          `<div class="doc-item"><span>${doc.filename} (${doc.chunk_count}c)</span><span style="display:flex;gap:6px;align-items:center;"><span style="color:var(--muted)">${doc.classification}</span><a href="#" onclick="deleteDoc('${doc.doc_id}');return false;" style="color:#f87171;text-decoration:none;" title="Delete">&times;</a></span></div>`
+        ).join("") || '<div style="font-size:12px;color:var(--muted)">No docs indexed yet.</div>';
+      } catch (_) {}
+    }
+    async function deleteDoc(docId) {
+      const r = await fetch(`/api/v1/docs/${docId}`, { method: "DELETE", headers: headers() });
+      if (r.ok) refreshStatus();
+    }
+    async function clearDocs() {
+      if (!confirm("Clear all indexed documents from RAG?")) return;
+      const r = await fetch("/api/v1/docs", { method: "DELETE", headers: headers() });
+      if (r.ok) refreshStatus();
+    }
+    async function uploadDoc() {
+      const files = Array.from(document.getElementById("docFile").files || []);
+      if (!files.length) return alert("Select one or more files first.");
+      const fd = new FormData();
+      for (const f of files) {
+        fd.append("files", f);
+      }
+      fd.append("classification", document.getElementById("docClass").value);
+      const r = await fetch("/api/v1/docs/upload-multiple", { method: "POST", headers: headers(), body: fd });
+      const data = await r.json();
+      if (!r.ok) return alert(data.detail || "Upload failed");
+      const summary = (data.uploaded || [])
+        .map(d => `• ${d.filename} (${d.chunk_count} chunks, ${d.classification})`)
+        .join("\n");
+      const failedMsg = (data.failed || []).length
+        ? `\nFailed: ${JSON.stringify(data.failed)}`
+        : "";
+      addMsg("bot", `Indexed ${data.total_uploaded}/${data.total_received} document(s):\n${summary}${failedMsg}`);
+      document.getElementById("docFile").value = "";
+      refreshStatus();
+    }
+    async function sendChat(e) {
+      e.preventDefault();
+      const input = document.getElementById("promptInput");
+      const text = input.value.trim();
+      if (!text) return;
+      input.value = "";
+      addMsg("user", text);
+      history.push({ role: "user", content: text });
+      const r = await fetch("/api/v1/chat", {
+        method: "POST",
+        headers: { ...headers(), "Content-Type": "application/json" },
+        body: JSON.stringify({ message: text, history: history.slice(-6) })
+      });
+      const data = await r.json();
+      if (!r.ok) return addMsg("bot", "Error: " + (data.detail || r.statusText));
+      history.push({ role: "assistant", content: data.reply });
+      const meta = `Provider: ${data.provider} | Skills: ${(data.skills_used||[]).map(s=>s.name).join(", ") || "none"} | MCP: ${(data.mcp_results||[]).map(m=>m.tool).join(", ") || "none"} | ${data.latency_ms}ms`;
+      addMsg("bot", data.reply, meta);
+    }
+    refreshStatus();
+  </script>
+</body>
+</html>

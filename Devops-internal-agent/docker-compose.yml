@@ -1,0 +1,59 @@
+services:
+  devops-agent:
+    build: .
+    container_name: devops-ai-agent
+    ports:
+      - "8005:8005"
+    env_file:
+      - .env
+    environment:
+      - POC_MODE=${POC_MODE:-mock}
+      - LLM_PROVIDER=${LLM_PROVIDER:-local_fallback}
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - POSTGRES_DSN=postgresql://devops_ro:devops_ro_pass@postgres:5432/app_prod_ro
+      - MYSQL_HOST=mysql
+      - MYSQL_PORT=3306
+      - MYSQL_USER=devops_ro
+      - MYSQL_PASSWORD=devops_ro_pass
+      - MYSQL_DATABASE=orders_ro
+    volumes:
+      - ./data:/app/data
+      - ./skills:/app/skills:ro
+    depends_on:
+      - postgres
+      - mysql
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: poc-postgres
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres_admin_poc
+      - POSTGRES_DB=app_prod_ro
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./scripts/init_db/postgres_init.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
+
+  mysql:
+    image: mysql:8.0
+    container_name: poc-mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=mysql_admin_poc
+      - MYSQL_DATABASE=orders_ro
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./scripts/init_db/mysql_init.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: poc-ollama
+    profiles: ["ollama"]
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+
+volumes:
+  ollama_data:

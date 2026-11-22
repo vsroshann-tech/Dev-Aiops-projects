@@ -1,0 +1,85 @@
+{
+  "app_name": "Internal DevOps AI Agent (RAG + MCP + Skills)",
+  "version": "0.1.0",
+  "resource": {
+    "name": "DevOps_AI_Agent_API",
+    "type": "restapi",
+    "base_url": "http://host.docker.internal:8005",
+    "headers": {
+      "X-API-Key": "dev-retool-poc-key-change-me",
+      "X-User-Email": "{{ current_user.email }}",
+      "X-User-Role": "devops",
+      "X-Client-Source": "retool"
+    }
+  },
+  "queries": [
+    {
+      "id": "chatAgent",
+      "method": "POST",
+      "path": "/api/v1/chat",
+      "body": {
+        "message": "{{ chat1.lastMessage }}",
+        "history": "{{ chat1.messageHistory.slice(-6) }}"
+      }
+    },
+    {
+      "id": "uploadInternalDocs",
+      "method": "POST",
+      "path": "/api/v1/docs/upload-batch-base64",
+      "body": {
+        "files": "{{ fileDropzone1.value.map(f => ({ filename: f.name, content_base64: f.base64Data })) }}",
+        "classification": "{{ classificationSelect.value || 'internal' }}"
+      }
+    },
+    {
+      "id": "listDocs",
+      "method": "GET",
+      "path": "/api/v1/docs"
+    },
+    {
+      "id": "listSkills",
+      "method": "GET",
+      "path": "/api/v1/skills"
+    },
+    {
+      "id": "listMcpTools",
+      "method": "GET",
+      "path": "/api/v1/mcp/tools"
+    },
+    {
+      "id": "getAuditLogs",
+      "method": "GET",
+      "path": "/api/v1/audit?limit=50"
+    }
+  ],
+  "layout": {
+    "left_sidebar": [
+      "fileDropzone1 (Upload Internal Docs)",
+      "classificationSelect (internal | confidential | public-poc)",
+      "docsTable ({{ listDocs.data.documents }})"
+    ],
+    "main_tabs": [
+      {
+        "tab": "Troubleshooting Chat",
+        "components": [
+          "chat1 (bound to chatAgent)",
+          "citationsInspector ({{ chatAgent.data.citations }})",
+          "mcpTelemetryInspector ({{ chatAgent.data.mcp_results }})"
+        ]
+      },
+      {
+        "tab": "Skills & MCP Registry",
+        "components": [
+          "skillsTable ({{ listSkills.data.skills }})",
+          "mcpToolsTable ({{ listMcpTools.data.tools }})"
+        ]
+      },
+      {
+        "tab": "Security Audit Log",
+        "components": [
+          "auditTable ({{ getAuditLogs.data.events }})"
+        ]
+      }
+    ]
+  }
+}
